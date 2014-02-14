@@ -20,48 +20,52 @@ class InexistentFile(Exception):
 
 
 class EncryptedUploadedFile(UploadedFile):
+    ''' Extends the django builtin UploadedFile.
+    The written file is encrypted using AES-256 cipher. '''
 
     def __init__(self, *args, **kwargs):
 
         self.passphrase = kwargs.pop('passphrase')
-        self.mode = kwargs.pop('mode')
         self.name = kwargs.get('name')
+
         if self.name:
-            # existing file
-            self.file = self.open_file()
-            super(EncryptedUploadedFile, self).__init__(
-                self.file, **kwargs)
-            EncryptedUploadedFileMetaData.load(self)
-            self.cipher = get_cipher_and_iv(self.passphrase, self.iv)[0]
-
+            self._open_existing_file(*args, **kwargs)
         else:
-            # new file
-            self.cipher, self.iv = get_cipher_and_iv(self.passphrase)
-            self.name = EncryptedFileSystemStorage().get_available_name()
-            self.file = self.open_file()
-            expire = kwargs.pop('expire_date')
-            if expire is None:
-                self.expire_date = now() + timedelta(days=10 * 365)
-            elif int(expire) > 0:
-                self.expire_date = now() + timedelta(seconds=int(expire))
+            self._open_new_file(*args, **kwargs)
 
-            self.clear_filename = kwargs.pop('clear_filename')
-            self.one_time = kwargs.pop('one_time')
-            kwargs['size'] = kwargs.pop('content_length')
-            
-            super(EncryptedUploadedFile, self).__init__(
-                self.file, self.name, **kwargs)
-            EncryptedUploadedFileMetaData.save_(self)
+    def _open_existing_file(self, *args, **kwargs):
+        self.file = self.open_file(mode='rb')
+        super(EncryptedUploadedFile, self).__init__(self.file, **kwargs)
+        EncryptedUploadedFileMetaData.load(self)
+        self.cipher = get_cipher_and_iv(self.passphrase, self.iv)[0]
+
+    def _open_new_file(self, *args, **kwargs):
+        self.cipher, self.iv = get_cipher_and_iv(self.passphrase)
+        self.name = EncryptedFileSystemStorage().get_available_name()
+        self.file = self.open_file(mode='wb')
+
+        # By default, we set an arbitrary 10 years expiration date.
+        expire = int(kwargs.pop('expire_date', 10 * settings.ONE_YEAR))
+        self.expire_date = now() + timedelta(seconds=expire)
+
+        self.clear_filename = kwargs.pop('clear_filename')
+        self.one_time = kwargs.pop('one_time', False)
+        kwargs['size'] = int(kwargs.pop('content_length', 0))
+        
+        super(EncryptedUploadedFile, self).__init__(
+            self.file, self.name, **kwargs)
+        EncryptedUploadedFileMetaData.save_(self)
+
 
     @property
     def path(self):
         return join(settings.UPLOAD_DIR, self.name)
 
-    def open_file(self):
+    def open_file(self, mode='rb'):
         try:
-            return open(self.path, self.mode)
+            return open(self.path, mode)
         except IOError:
-            if self.mode == 'rb':
+            if mode == 'rb':
                 raise InexistentFile
             raise
                 

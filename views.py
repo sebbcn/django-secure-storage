@@ -76,7 +76,7 @@ class DownloadSecureStorageView(SecureStorageView):
             file_id = form.cleaned_data['file_id']
             passphrase = form.cleaned_data['passphrase']
             content = EncryptedFileSystemStorage()\
-                .open(name=file_id, passphrase=passphrase, mode='rb')
+                .open(name=file_id, passphrase=passphrase)
             response = StreamingHttpResponse(streaming_content=content.chunks())
             return self.add_headers(response, content)
 

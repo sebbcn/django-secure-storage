@@ -205,7 +205,6 @@ class SecureFileUploadHandler(IntelligentUploadHandler):
             self, input_data, META, content_length, boundary, encoding=None):
 
         self.content_length = content_length
-
         if content_length > settings.UPLOAD_FILE_SIZE_LIMIT:
             raise SkipFile
 
@@ -224,14 +223,12 @@ class SecureFileUploadHandler(IntelligentUploadHandler):
                 pass
             
     def receive_data_chunk(self, raw_data, start):
-
         self.file.encrypt_and_write(raw_data)
 
     def new_file(self, field_name, file_name, *args, **kwargs):
 
         super(SecureFileUploadHandler, self).new_file(
             field_name, file_name, *args, **kwargs)
-        kwargs['mode'] = 'wb'
 
         if self.passphrase:
             kwargs['clear_filename'] = file_name
